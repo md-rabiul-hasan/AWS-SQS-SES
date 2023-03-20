@@ -1,0 +1,52 @@
+service: my-serverless-project
+
+provider:
+  name: aws
+  runtime: nodejs16.x
+  region: us-east-1
+  stage: dev
+  environment:
+    MAIL_QUEUE_URL: ${self:custom.sendMailQueue.url}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - ses:SendEmail
+        - sqs:ReceiveMessage
+        - sqs:SendMessage
+      Resource: '*'
+
+custom:
+  sendMailQueue:
+    name: SQS-SNS-LEARNING
+    arn: !GetAtt MailQueue.Arn
+    url: !Ref MailQueue
+
+resources:
+  Resources:
+    MailQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:custom.sendMailQueue.name}
+  Outputs:
+    MailQueueArn:
+      Value: ${self:custom.sendMailQueue.arn}
+      Export:
+        Name: ${self:custom.sendMailQueue.name}-Arn
+    MailQueueUrl:
+      Value: ${self:custom.sendMailQueue.url}
+      Export:
+        Name: ${self:custom.sendMailQueue.name}-Url
+
+functions:
+  sendMailToQueue:
+    handler: sendMail.handler
+    events:
+      - http:
+          path: sendmail-queue
+          method: POST
+  sendMail:
+    handler: mail/mail.handler
+    events:
+      - sqs:
+          arn: ${self:custom.sendMailQueue.arn}
+          batchSize: 1
